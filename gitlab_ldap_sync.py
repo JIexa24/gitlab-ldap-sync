@@ -63,7 +63,7 @@ if __name__ == "__main__":
         l = ldap.initialize(uri=ldap_url)
         l.simple_bind_s(ldap_bind_dn,
                         ldap_password)
-    except: # pylint: disable=bare-except
+    except:  # pylint: disable=bare-except
         logging.error('Error while connecting to ldap')
         sys.exit(1)
 
@@ -78,19 +78,19 @@ if __name__ == "__main__":
     # ,
     #  attrlist=['uid', 'sAMAccountName', 'mail', 'displayName'])
     ldap_gitlab_users = {}
-    for user in l.search_s(base=ldap_users_base_dn,
+    for dn, user in l.search_s(base=ldap_users_base_dn,
                            scope=ldap.SCOPE_SUBTREE,
                            filterstr=USER_FILTER, attrlist=['uid', 'displayName']):
-        username = user[1]['uid'][0].decode('utf-8')
+        username = user['uid'][0].decode('utf-8')
         ldap_gitlab_users[username] = {
             'admin': False,
-            'displayName': user[1]['displayName'][0].decode('utf-8'),
-            'dn': user[0]
+            'displayName': user['displayName'][0].decode('utf-8'),
+            'dn': dn
         }
-    for user in l.search_s(base=ldap_users_base_dn,
+    for dn, user in l.search_s(base=ldap_users_base_dn,
                            scope=ldap.SCOPE_SUBTREE,
                            filterstr=ADMIN_USER_FILTER, attrlist=['uid', 'displayName']):
-        username = user[1]['uid'][0].decode('utf-8')
+        username = user['uid'][0].decode('utf-8')
         if username in ldap_gitlab_users:
             ldap_gitlab_users[username]['admin'] = True
         else:
