@@ -79,8 +79,8 @@ if __name__ == "__main__":
     #  attrlist=['uid', 'sAMAccountName', 'mail', 'displayName'])
     ldap_gitlab_users = {}
     for dn, user in l.search_s(base=ldap_users_base_dn,
-                           scope=ldap.SCOPE_SUBTREE,
-                           filterstr=USER_FILTER, attrlist=['uid', 'displayName']):
+                               scope=ldap.SCOPE_SUBTREE,
+                               filterstr=USER_FILTER, attrlist=['uid', 'displayName']):
         username = user['uid'][0].decode('utf-8')
         ldap_gitlab_users[username] = {
             'admin': False,
@@ -88,8 +88,8 @@ if __name__ == "__main__":
             'dn': dn
         }
     for dn, user in l.search_s(base=ldap_users_base_dn,
-                           scope=ldap.SCOPE_SUBTREE,
-                           filterstr=ADMIN_USER_FILTER, attrlist=['uid', 'displayName']):
+                               scope=ldap.SCOPE_SUBTREE,
+                               filterstr=ADMIN_USER_FILTER, attrlist=['uid', 'displayName']):
         username = user['uid'][0].decode('utf-8')
         if username in ldap_gitlab_users:
             ldap_gitlab_users[username]['admin'] = True
