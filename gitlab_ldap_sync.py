@@ -67,7 +67,7 @@ if __name__ == "__main__":
         logging.error('Error while connecting to ldap')
         sys.exit(1)
 
-    logging.info('Getting all users from GitLab')
+    logging.info('Getting all users from GitLab and LDAP')
     gitlab_users = []
 
     USER_FILTER = f"(&(memberof=cn={ldap_gitlab_users_group},{ldap_group_base_dn})(!(nsaccountlock=TRUE)))"
