@@ -4,6 +4,7 @@ Syncing users in gitlab with ldap provider.
 Only one porovider are supported.
 Sync user fields:
 - admin
+- name (displayName)
 Version 1 at 2023
 """
 # -*- coding: utf-8 -*-
@@ -123,11 +124,11 @@ if __name__ == "__main__":
                          user.is_admin, ldap_gitlab_users[user.username]['admin'])
             user.admin = ldap_gitlab_users[user.username]['admin']
             need_to_update_user = True
-        # if ldap_gitlab_users[user.username]['displayName'] != user.name:
-        #     logging.info('User %s, update name %s->%s', user.username,
-        #                  user.name, ldap_gitlab_users[user.username]['displayName'])
-        #     user.name = ldap_gitlab_users[user.username]['displayName']
-        #     need_to_update_user = True
+        if ldap_gitlab_users[user.username]['displayName'] != user.name:
+            logging.info('User %s, update name %s->%s', user.username,
+                         user.name, ldap_gitlab_users[user.username]['displayName'])
+            user.name = ldap_gitlab_users[user.username]['displayName']
+            need_to_update_user = True
         if need_to_update_user:
             logging.info('Saving user %s', user.username)
             user.save()
