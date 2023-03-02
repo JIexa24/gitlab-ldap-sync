@@ -3,8 +3,8 @@
 Syncing users in gitlab with ldap provider.
 Only one porovider are supported.
 Sync user fields:
-- admin
-- name (displayName)
+- admin (LDAP: by group)
+- name (LDAP: displayName attribute)
 Version 1 at 2023
 """
 # -*- coding: utf-8 -*-
