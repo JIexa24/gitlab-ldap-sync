@@ -119,10 +119,20 @@ if __name__ == "__main__":
 
         need_to_update_user = False
         if user.username not in ldap_gitlab_users:
-            logging.warning(
-                'User %s may be disabled in ldap or excluded from access group',
-                user.username)
+            if user.state == 'active':
+                logging.warning(
+                    'User %s disabled in ldap or excluded from access group',
+                    user.username)
+                user.ban()
+                logging.info(
+                    'User %s has banned',
+                    user.username)
             continue
+        if user.state == 'banned':
+            user.unban()
+            logging.info(
+                'User %s unbanned',
+                user.username)
         if ldap_gitlab_users[user.username]['admin'] != user.is_admin:
             logging.info('User %s, update is_admin %s->%s', user.username,
                          user.is_admin, ldap_gitlab_users[user.username]['admin'])
@@ -210,16 +220,18 @@ if __name__ == "__main__":
                 m['object'].delete()
 
         root_member = next((
-                item for item in gitlab_group['members'] if item["username"] == 'root'), None)
+            item for item in gitlab_group['members'] if item["username"] == 'root'), None)
         root = gl.users.list(username='root')[0]
         if not root_member:
             # Root user must be owner on all groups which synced
-            logging.info("Add root(id=%d) as owner to group %s", root.id, groupname)
-            gitlab_group["object"].members.create({'user_id': root.id, 'access_level': gitlab.OWNER_ACCESS})
+            logging.info("Add root(id=%d) as owner to group %s",
+                         root.id, groupname)
+            gitlab_group["object"].members.create(
+                {'user_id': root.id, 'access_level': gitlab.const.OWNER_ACCESS})
 
         # If root has access level lesser than owner - fix it
-        if root_member and root_member['object'].access_level < gitlab.OWNER_ACCESS:
-            root_member['object'].access_level = gitlab.OWNER_ACCESS
+        if root_member and root_member['object'].access_level < gitlab.const.OWNER_ACCESS:
+            root_member['object'].access_level = gitlab.const.OWNER_ACCESS
             root_member['object'].save()
             logging.info("Update root(id=%d) access level to owner")
 
@@ -240,5 +252,7 @@ if __name__ == "__main__":
                     continue
                 user = users[0]
                 # If user is member and exist in gitlab - add as developer member
-                gitlab_group["object"].members.create({'user_id': user.id, 'access_level': gitlab.DEVELOPER_ACCESS})
-                logging.info("Add %s(id=%d) to group %s", m, user.id, groupname)
+                gitlab_group["object"].members.create(
+                    {'user_id': user.id, 'access_level': gitlab.DEVELOPER_ACCESS})
+                logging.info("Add %s(id=%d) to group %s",
+                             m, user.id, groupname)
