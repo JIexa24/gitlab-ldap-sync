@@ -80,11 +80,7 @@ if __name__ == "__main__":
 
     USER_FILTER = f"(&(memberof=cn={ldap_gitlab_users_group},{ldap_group_base_dn})(!(nsaccountlock=TRUE)))"
     ADMIN_USER_FILTER = f"(&(memberof=cn={ldap_gitlab_admin_group},{ldap_group_base_dn})(!(nsaccountlock=TRUE)))"
-    # ldap_gitlab_users = l.search_s(base=ldap_users_base_dn,
-    #                                scope=ldap.SCOPE_SUBTREE,
-    #                                filterstr=USER_FILTER)
-    # ,
-    #  attrlist=['uid', 'sAMAccountName', 'mail', 'displayName'])
+
     ldap_gitlab_users = {}
     for dn, user in l.search_s(base=ldap_users_base_dn,
                                scope=ldap.SCOPE_SUBTREE,
