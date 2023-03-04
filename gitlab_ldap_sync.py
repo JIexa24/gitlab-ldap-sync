@@ -138,7 +138,7 @@ if __name__ == "__main__":
             user.save()
 
     # TODO: Сделать синхронизацию доступов. По умолчанию developer, при
-    # наличии в группе {ldap_gitlab_group_prefix}-{level} давать level
+    # наличии в группе {ldap_gitlab_group_prefix}-{group}-{level} давать level
     logging.info('Getting all groups from GitLab and LDAP')
     gitlab_groups = {}
     for group in gl.groups.list(all=True):
