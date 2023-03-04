@@ -253,6 +253,6 @@ if __name__ == "__main__":
                 user = users[0]
                 # If user is member and exist in gitlab - add as developer member
                 gitlab_group["object"].members.create(
-                    {'user_id': user.id, 'access_level': gitlab.DEVELOPER_ACCESS})
+                    {'user_id': user.id, 'access_level': gitlab.const.DEVELOPER_ACCESS})
                 logging.info("Add %s(id=%d) to group %s",
                              m, user.id, groupname)
