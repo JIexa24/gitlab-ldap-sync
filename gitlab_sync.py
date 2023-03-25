@@ -75,7 +75,40 @@ class GitlabSync:
         self.expired_user_filter = f"(&(memberof=cn={self.ldap_gitlab_users_group},{self.ldap_group_base_dn})(!(nsaccountlock=TRUE))(krbPasswordExpiration<={password_expiration_border_date}))"
         self.admin_user_filter = f"(&(memberof=cn={self.ldap_gitlab_admin_group},{self.ldap_group_base_dn})(!(nsaccountlock=TRUE)))"
 
+        self.check_config()
         logging.info('Initialize gitlab-ldap-sync')
+
+    def check_config(self):
+        """
+        Check if config values are set
+        """
+        errors = 0
+        if not self.gitlab_api_url:
+            logging.error("GITLAB_API_URL is empty")
+            errors = errors + 1
+        if not self.gitlab_token:
+            logging.error("GITLAB_TOKEN is empty")
+            errors = errors + 1
+        if not self.ldap_url:
+            logging.error("LDAP_URL is empty")
+            errors = errors + 1
+        if not self.ldap_users_base_dn:
+            logging.error("LDAP_USERS_BASE_DN is empty")
+            errors = errors + 1
+        if not self.ldap_group_base_dn:
+            logging.error("LDAP_GROUP_BASE_DN is empty")
+            errors = errors + 1
+        if not self.ldap_bind_dn:
+            logging.error("LDAP_BIND_DN is empty")
+            errors = errors + 1
+        if not self.ldap_password:
+            logging.error("LDAP_PASSWORD is empty")
+            errors = errors + 1
+        if not self.ldap_group_compat_base_dn:
+            logging.error("LDAP_GROUP_COMPAT_BASE_DN is empty")
+            errors = errors + 1
+        if errors > 0:
+            exit(1)
 
     def sync(self):
         """
