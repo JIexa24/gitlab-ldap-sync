@@ -75,7 +75,6 @@ class GitlabSync:
         self.expired_user_filter = f"(&(memberof=cn={self.ldap_gitlab_users_group},{self.ldap_group_base_dn})(!(nsaccountlock=TRUE))(krbPasswordExpiration<={password_expiration_border_date}))"
         self.admin_user_filter = f"(&(memberof=cn={self.ldap_gitlab_admin_group},{self.ldap_group_base_dn})(!(nsaccountlock=TRUE)))"
 
-        self.check_config()
         logging.info('Initialize gitlab-ldap-sync')
 
     def check_config(self):
@@ -107,15 +106,19 @@ class GitlabSync:
         if not self.ldap_group_compat_base_dn:
             logging.error("LDAP_GROUP_COMPAT_BASE_DN is empty")
             errors = errors + 1
-        if errors > 0:
-            exit(1)
+        return errors
 
     def sync(self):
         """
         Sync gitlab entities
         """
-        self.connect_to_gitlab()
-        self.bind_to_ldap()
+        is_not_connected = 0
+        is_not_connected += self.check_config()
+        is_not_connected += self.connect_to_gitlab()
+        is_not_connected += self.bind_to_ldap()
+        if is_not_connected > 0:
+            logging.error("Cannot connect, exit sync class")
+            return
         self.search_all_users_in_ldap()
         self.sync_gitlab_users()
         self.sync_gitlab_groups()
@@ -131,8 +134,9 @@ class GitlabSync:
                                     ssl_verify=True)
         if self.gl is None:
             logging.error('Cannot create gitlab object, aborting')
-            sys.exit(1)
+            return 1
         self.gl.auth()
+        return 0
 
     def bind_to_ldap(self):
         """
@@ -141,7 +145,7 @@ class GitlabSync:
         logging.info('Connecting to LDAP')
         if not self.ldap_url:
             logging.error('You should configure LDAP URL')
-            sys.exit(1)
+            return 1
 
         try:
             self.ldap_obj = ldap.initialize(uri=self.ldap_url)
@@ -149,10 +153,11 @@ class GitlabSync:
                                         self.ldap_password)
         except:  # pylint: disable=bare-except
             logging.error('Error while connecting to ldap')
-            sys.exit(1)
+            return 1
         if self.ldap_obj is None:
             logging.error('Cannot create ldap object, aborting')
-            sys.exit(1)
+            return 1
+        return 0
 
     def search_all_users_in_ldap(self):
         """
