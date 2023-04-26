@@ -465,9 +465,7 @@ class GitlabSync:
         """
         Sync groups in gitlab.
         """
-        # TwODO: Сделать синхронизацию доступов. По умолчанию developer, при
-        # наличии в группе {ldap_gitlab_group_prefix}-{group}-{level} давать
-        # level
+        # TODO: Сделать вложенные группы
         logging.info('Sync groups')
         # gitlab_groups = {}
         for group in self.gl.groups.list(all=True):
