@@ -286,10 +286,12 @@ class GitlabSync:
                 title = f"FreeIPA managed key {key_date}"
                 if len(ipa_key_array) > 2:
                     title = f"{title} {ipa_key_array[2]}"
+                keyid = -1
                 if not self.sync_dry_run:
                     key = user.keys.create({'title': title,
                                             'key': ipa_ssh_key_decoded})
-                logging.info("Add key %d for user %s: %s", key.id,
+                    keyid = key.id
+                logging.info("Add key %d for user %s: %s", keyid,
                              user.username, title)
             except:  # pylint: disable=bare-except
                 logging.error("Cannot add key for user %s: %s",
