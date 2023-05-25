@@ -19,7 +19,6 @@ Version 2 at 03.2023
 # -*- coding: utf-8 -*-
 # pylint: disable=line-too-long,import-error,no-member
 
-import sys
 import os
 import logging
 import datetime
@@ -112,16 +111,21 @@ class GitlabSync:
         """
         Sync gitlab entities
         """
-        is_not_connected = 0
-        is_not_connected += self.check_config()
-        is_not_connected += self.connect_to_gitlab()
-        is_not_connected += self.bind_to_ldap()
-        if is_not_connected > 0:
-            logging.error("Cannot connect, exit sync class")
+        try:
+            is_not_connected = 0
+            is_not_connected += self.check_config()
+            is_not_connected += self.connect_to_gitlab()
+            is_not_connected += self.bind_to_ldap()
+            if is_not_connected > 0:
+                logging.error("Cannot connect, exit sync class")
+                return
+            self.search_all_users_in_ldap()
+            self.sync_gitlab_users()
+            self.sync_gitlab_groups()
+        except Exception as expt: # pylint: disable=broad-exception-caught
+            logging.error("Cannot sync, received exception %s", expt)
             return
-        self.search_all_users_in_ldap()
-        self.sync_gitlab_users()
-        self.sync_gitlab_groups()
+
 
     def connect_to_gitlab(self):
         """
