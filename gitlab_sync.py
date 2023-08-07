@@ -71,7 +71,7 @@ class GitlabSync:
         password_expiration_border_date = date_expiration.strftime(
             "%Y%m%d%H%M%SZ")
         self.user_filter = f"(&(memberof=cn={self.ldap_gitlab_users_group},{self.ldap_group_base_dn})(!(nsaccountlock=TRUE)))"
-        self.user_filter_with_uid = f"(uid=%s)"
+        self.user_filter_with_uid = "(uid=%s)"
         self.expired_user_filter = f"(&(memberof=cn={self.ldap_gitlab_users_group},{self.ldap_group_base_dn})(!(nsaccountlock=TRUE))(krbPasswordExpiration<={password_expiration_border_date}))"
         self.admin_user_filter = f"(&(memberof=cn={self.ldap_gitlab_admin_group},{self.ldap_group_base_dn})(!(nsaccountlock=TRUE)))"
 
