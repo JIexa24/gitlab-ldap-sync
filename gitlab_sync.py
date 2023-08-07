@@ -71,6 +71,7 @@ class GitlabSync:
         password_expiration_border_date = date_expiration.strftime(
             "%Y%m%d%H%M%SZ")
         self.user_filter = f"(&(memberof=cn={self.ldap_gitlab_users_group},{self.ldap_group_base_dn})(!(nsaccountlock=TRUE)))"
+        self.user_filter_with_uid = f"(&(memberof=cn={self.ldap_gitlab_users_group},{self.ldap_group_base_dn})(uid=%s))"
         self.expired_user_filter = f"(&(memberof=cn={self.ldap_gitlab_users_group},{self.ldap_group_base_dn})(!(nsaccountlock=TRUE))(krbPasswordExpiration<={password_expiration_border_date}))"
         self.admin_user_filter = f"(&(memberof=cn={self.ldap_gitlab_admin_group},{self.ldap_group_base_dn})(!(nsaccountlock=TRUE)))"
 
@@ -122,10 +123,9 @@ class GitlabSync:
             self.search_all_users_in_ldap()
             self.sync_gitlab_users()
             self.sync_gitlab_groups()
-        except Exception as expt: # pylint: disable=broad-exception-caught
+        except Exception as expt:  # pylint: disable=broad-exception-caught
             logging.error("Cannot sync, received exception %s", expt)
             return
-
 
     def connect_to_gitlab(self):
         """
@@ -199,6 +199,19 @@ class GitlabSync:
             username = user['uid'][0].decode('utf-8')
             self.expired_ldap_gitlab_users.append(username)
 
+    def is_ldap_user_exist(self, username):
+        """
+        Search user in LDAP using filter by uisername
+        """
+        # pylint: disable=invalid-name
+        for _, _ in self.ldap_obj.search_s(base=self.ldap_users_base_dn,
+                                           scope=ldap.SCOPE_SUBTREE,
+                                           filterstr=(
+                                               self.user_filter_with_uid % username),
+                                           attrlist=['uid']):
+            return True
+        return False
+
     def ban_user(self, user, reason=''):
         """
         Ban user in gitlab
@@ -209,6 +222,16 @@ class GitlabSync:
             logging.info(
                 'User %s has banned. Reason: %s',
                 user.username, reason)
+
+    def delete_user(self, user, reason=''):
+        """
+        Delete user in gitlab
+        """
+        # if not self.sync_dry_run:
+        #     user.delete()
+        logging.info(
+            'User %s has deleted. Reason: %s',
+            user.username, reason)
 
     def unban_user(self, user):
         """
@@ -240,8 +263,12 @@ class GitlabSync:
                 continue
 
             if user.username not in self.ldap_gitlab_users:
-                self.ban_user(
-                    user, 'Disabled in ldap or excluded from access group')
+                if self.is_ldap_user_exist(user.username):
+                    self.ban_user(
+                        user, 'Disabled in ldap or excluded from access group')
+                else:
+                    self.delete_user(
+                        user, 'Deleted in ldap')
                 continue
             if user.username in self.expired_ldap_gitlab_users:
                 self.ban_user(user, 'Has expired password')
