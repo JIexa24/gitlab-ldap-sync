@@ -60,8 +60,7 @@ class GitlabSync:
         self.ldap_gitlab_admin_group = ldap_gitlab_admin_group_env if ldap_gitlab_admin_group_env else 'gitlab-admins'
         ldap_gitlab_group_prefix_env = os.getenv('LDAP_GITLAB_GROUP_PREFIX')
         self.ldap_gitlab_group_prefix = ldap_gitlab_group_prefix_env if ldap_gitlab_group_prefix_env else 'gitlab-group-'
-        ldap_group_compat_base_dn_env = os.getenv('LDAP_GROUP_COMPAT_BASE_DN')
-        self.ldap_group_compat_base_dn = ldap_group_compat_base_dn_env if ldap_group_compat_base_dn_env else ''
+
         # pylint: disable=invalid-name
         self.gl = None
         self.ldap_obj = None
@@ -72,6 +71,7 @@ class GitlabSync:
             "%Y%m%d%H%M%SZ")
         self.user_filter = f"(&(memberof=cn={self.ldap_gitlab_users_group},{self.ldap_group_base_dn})(!(nsaccountlock=TRUE)))"
         self.user_filter_with_uid = "(uid=%s)"
+        self.groups_memberof_filter = f"(memberof=cn=%s,{self.ldap_group_base_dn})"
         self.expired_user_filter = f"(&(memberof=cn={self.ldap_gitlab_users_group},{self.ldap_group_base_dn})(!(nsaccountlock=TRUE))(krbPasswordExpiration<={password_expiration_border_date}))"
         self.admin_user_filter = f"(&(memberof=cn={self.ldap_gitlab_admin_group},{self.ldap_group_base_dn})(!(nsaccountlock=TRUE)))"
 
@@ -102,9 +102,6 @@ class GitlabSync:
             errors = errors + 1
         if not self.ldap_password:
             logging.error("LDAP_PASSWORD is empty")
-            errors = errors + 1
-        if not self.ldap_group_compat_base_dn:
-            logging.error("LDAP_GROUP_COMPAT_BASE_DN is empty")
             errors = errors + 1
         return errors
 
@@ -227,8 +224,8 @@ class GitlabSync:
         """
         Delete user in gitlab
         """
-        # if not self.sync_dry_run:
-        #     user.delete()
+        if not self.sync_dry_run:
+            user.delete()
         logging.info(
             'User %s has deleted. Reason: %s',
             user.username, reason)
@@ -449,26 +446,37 @@ class GitlabSync:
 
         # Find all gitlab groups in ldap
         ldap_members = {}
+        is_group_exist = False
         for _, group in self.ldap_obj.search_s(base=self.ldap_group_base_dn,
                                                scope=ldap.SCOPE_SUBTREE,
                                                filterstr=gitlab_groups_filter,
                                                attrlist=['cn', 'description']):
             # pylint: disable=invalid-name
             g = group['cn'][0].decode('utf-8')
+            # Group is managed by ldap only if ldap has group with name
+            # fully equal to gitlab group. If we have testgroup-owner, but not
+            # have testgroup we consider group are not managed by ldap
+            # if g == groupname:
+            #     is_group_exist = True
+            # Or not
+            is_group_exist = True
 
             level = self.get_ldap_group_access_level_by_name(g)
 
-            # # Find all members of this ldap group.
-            # # Need to use compat because it resolves subgroups
-            gitlab_group_members_filter = f"(cn={g})"
-            members_search = self.ldap_obj.search_s(base=self.ldap_group_compat_base_dn,
+            # Find all members of this ldap group.
+            members_search = self.ldap_obj.search_s(base=self.ldap_users_base_dn,
                                                     scope=ldap.SCOPE_SUBTREE,
-                                                    filterstr=gitlab_group_members_filter,
-                                                    attrlist=['memberUid'])
-            if len(members_search) > 0:
-                _, members_data = members_search[0]
-                if 'memberUid' in members_data:
-                    for x in members_data['memberUid']:
+                                                    filterstr=(self.groups_memberof_filter % g),
+                                                    attrlist=['uid'])
+            #  No members
+            if len(members_search) == 0:
+                continue
+
+            for member in members_search:
+                # logging.error(member)
+                _, member_data = member
+                if 'uid' in member_data:
+                    for x in member_data['uid']:
                         uid = x.decode('utf-8')
                         if uid not in ldap_members:
                             ldap_members[uid] = {
@@ -477,7 +485,7 @@ class GitlabSync:
                         else:
                             if ldap_members[uid]['access_level'] < level:
                                 ldap_members[uid]['access_level'] = level
-        return ldap_members
+        return ldap_members, is_group_exist
 
     def get_gitlab_group_members(self, group):
         """
@@ -500,18 +508,13 @@ class GitlabSync:
         logging.info('Sync groups')
         # gitlab_groups = {}
         for group in self.gl.groups.list(all=True):
-            # gitlab_groups[group.path] = {
-            #     "name": group.name,
-            #     "members": self.get_gitlab_group_members(group),
-            #     "object": group
-            # }
-
-            ldap_members = self.get_ldap_gitlab_group_members(group.name)
-            gitlab_group_members = self.get_gitlab_group_members(group)
+            logging.info('Sync group %s', group.name)
+            ldap_members, is_exist = self.get_ldap_gitlab_group_members(group.name)
             # Group is not managed by ldap
-            if len(ldap_members) == 0:
+            if not is_exist:
                 continue
 
+            gitlab_group_members = self.get_gitlab_group_members(group)
             # pylint: disable=invalid-name
             for m in gitlab_group_members:
                 # Check if member not in ldap group
