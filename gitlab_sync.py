@@ -171,6 +171,8 @@ class GitlabSync:
                                                attrlist=['uid',
                                                          'displayName',
                                                          'ipaSshPubKey']):
+            if 'uid' not in user:
+                continue
             username = user['uid'][0].decode('utf-8')
             self.ldap_gitlab_users[username] = {
                 'admin': False,
@@ -182,6 +184,8 @@ class GitlabSync:
                                                scope=ldap.SCOPE_SUBTREE,
                                                filterstr=self.admin_user_filter,
                                                attrlist=['uid']):
+            if 'uid' not in user:
+                continue
             username = user['uid'][0].decode('utf-8')
             if username in self.ldap_gitlab_users:
                 self.ldap_gitlab_users[username]['admin'] = True
@@ -193,6 +197,8 @@ class GitlabSync:
         for dn, user in self.ldap_obj.search_s(base=self.ldap_users_base_dn,
                                                scope=ldap.SCOPE_SUBTREE,
                                                filterstr=self.expired_user_filter, attrlist=['uid']):
+            if 'uid' not in user:
+                continue
             username = user['uid'][0].decode('utf-8')
             self.expired_ldap_gitlab_users.append(username)
 
@@ -201,11 +207,13 @@ class GitlabSync:
         Search user in LDAP using filter by uisername
         """
         # pylint: disable=invalid-name
-        for _, _ in self.ldap_obj.search_s(base=self.ldap_users_base_dn,
-                                           scope=ldap.SCOPE_SUBTREE,
-                                           filterstr=(
-                                               self.user_filter_with_uid % username),
-                                           attrlist=['uid']):
+        for _, user in self.ldap_obj.search_s(base=self.ldap_users_base_dn,
+                                              scope=ldap.SCOPE_SUBTREE,
+                                              filterstr=(
+                                                  self.user_filter_with_uid % username),
+                                              attrlist=['uid']):
+            if 'uid' not in user:
+                continue
             return True
         return False
 
@@ -466,7 +474,8 @@ class GitlabSync:
             # Find all members of this ldap group.
             members_search = self.ldap_obj.search_s(base=self.ldap_users_base_dn,
                                                     scope=ldap.SCOPE_SUBTREE,
-                                                    filterstr=(self.groups_memberof_filter % g),
+                                                    filterstr=(
+                                                        self.groups_memberof_filter % g),
                                                     attrlist=['uid'])
             #  No members
             if len(members_search) == 0:
@@ -509,7 +518,8 @@ class GitlabSync:
         # gitlab_groups = {}
         for group in self.gl.groups.list(all=True):
             logging.info('Sync group %s', group.name)
-            ldap_members, is_exist = self.get_ldap_gitlab_group_members(group.name)
+            ldap_members, is_exist = self.get_ldap_gitlab_group_members(
+                group.name)
             # Group is not managed by ldap
             if not is_exist:
                 continue
