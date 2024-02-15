@@ -123,6 +123,7 @@ class GitlabSync:
         except Exception as expt:  # pylint: disable=broad-exception-caught
             logging.error("Cannot sync, received exception %s", expt)
             return
+        logging.info('Complete syncronization')
 
     def connect_to_gitlab(self):
         """
