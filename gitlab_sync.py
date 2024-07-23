@@ -26,6 +26,9 @@ import gitlab
 import ldap
 import ldap.asyncsearch
 
+logging.basicConfig(level=logging.INFO)
+
+
 class GitlabSync:
     """
     Sync gitlab users/groups with freeipa ldap
@@ -71,9 +74,8 @@ class GitlabSync:
         self.groups_memberof_filter = f"(memberof=cn=%s,{self.ldap_group_base_dn})"
         self.expired_user_filter = f"(&(memberof=cn={self.ldap_gitlab_users_group},{self.ldap_group_base_dn})(!(nsaccountlock=TRUE))(krbPasswordExpiration<={password_expiration_border_date}))"
         self.admin_user_filter = f"(&(memberof=cn={self.ldap_gitlab_admin_group},{self.ldap_group_base_dn})(!(nsaccountlock=TRUE)))"
-        self.logger = logging.getLogger("Gitlab syncer")
-        self.logger.setLevel(logging.INFO)
-        self.logger.info('Initialize gitlab-ldap-sync')
+
+        logging.info('Initialize gitlab-ldap-sync')
 
     def check_config(self):
         """
@@ -81,25 +83,25 @@ class GitlabSync:
         """
         errors = 0
         if not self.gitlab_api_url:
-            self.logger.error("GITLAB_API_URL is empty")
+            logging.error("GITLAB_API_URL is empty")
             errors = errors + 1
         if not self.gitlab_token:
-            self.logger.error("GITLAB_TOKEN is empty")
+            logging.error("GITLAB_TOKEN is empty")
             errors = errors + 1
         if not self.ldap_url:
-            self.logger.error("LDAP_URL is empty")
+            logging.error("LDAP_URL is empty")
             errors = errors + 1
         if not self.ldap_users_base_dn:
-            self.logger.error("LDAP_USERS_BASE_DN is empty")
+            logging.error("LDAP_USERS_BASE_DN is empty")
             errors = errors + 1
         if not self.ldap_group_base_dn:
-            self.logger.error("LDAP_GROUP_BASE_DN is empty")
+            logging.error("LDAP_GROUP_BASE_DN is empty")
             errors = errors + 1
         if not self.ldap_bind_dn:
-            self.logger.error("LDAP_BIND_DN is empty")
+            logging.error("LDAP_BIND_DN is empty")
             errors = errors + 1
         if not self.ldap_password:
-            self.logger.error("LDAP_PASSWORD is empty")
+            logging.error("LDAP_PASSWORD is empty")
             errors = errors + 1
         return errors
 
@@ -113,27 +115,27 @@ class GitlabSync:
             is_not_connected += self.connect_to_gitlab()
             is_not_connected += self.bind_to_ldap()
             if is_not_connected > 0:
-                self.logger.error("Cannot connect, exit sync class")
+                logging.error("Cannot connect, exit sync class")
                 return
             self.search_all_users_in_ldap()
             self.sync_gitlab_users()
             self.sync_gitlab_groups()
         except Exception as expt:  # pylint: disable=broad-exception-caught
-            self.logger.error("Cannot sync, received exception %s", expt)
+            logging.error("Cannot sync, received exception %s", expt)
             return
-        self.logger.info('Complete syncronization')
+        logging.info('Complete syncronization')
 
     def connect_to_gitlab(self):
         """
         Connect to gitlab using token
         """
-        self.logger.info('Connecting to GitLab')
+        logging.info('Connecting to GitLab')
         if self.gitlab_token:
             self.gl = gitlab.Gitlab(url=self.gitlab_api_url,
                                     private_token=self.gitlab_token,
                                     ssl_verify=True)
         if self.gl is None:
-            self.logger.error('Cannot create gitlab object, aborting')
+            logging.error('Cannot create gitlab object, aborting')
             return 1
         self.gl.auth()
         return 0
@@ -142,9 +144,9 @@ class GitlabSync:
         """
         Bind to LDAP
         """
-        self.logger.info('Connecting to LDAP')
+        logging.info('Connecting to LDAP')
         if not self.ldap_url:
-            self.logger.error('You should configure LDAP URL')
+            logging.error('You should configure LDAP URL')
             return 1
 
         try:
@@ -152,10 +154,10 @@ class GitlabSync:
             self.ldap_obj.simple_bind_s(self.ldap_bind_dn,
                                         self.ldap_password)
         except:  # pylint: disable=bare-except
-            self.logger.error('Error while connecting to ldap')
+            logging.error('Error while connecting to ldap')
             return 1
         if self.ldap_obj is None:
-            self.logger.error('Cannot create ldap object, aborting')
+            logging.error('Cannot create ldap object, aborting')
             return 1
         return 0
 
@@ -189,7 +191,7 @@ class GitlabSync:
             if username in self.ldap_gitlab_users:
                 self.ldap_gitlab_users[username]['admin'] = True
             else:
-                self.logger.warning(
+                logging.warning(
                     'User %s in admin group but does not have accesss to gitlab',
                     user.username)
         self.expired_ldap_gitlab_users = []
@@ -223,7 +225,7 @@ class GitlabSync:
         if user.state == 'active':
             if not self.sync_dry_run:
                 user.ban()
-            self.logger.info(
+            logging.info(
                 'User %s has banned. Reason: %s',
                 user.username, reason)
 
@@ -233,7 +235,7 @@ class GitlabSync:
         """
         if not self.sync_dry_run:
             user.delete()
-        self.logger.info(
+        logging.info(
             'User %s has deleted. Reason: %s',
             user.username, reason)
 
@@ -244,7 +246,7 @@ class GitlabSync:
         if user.state == 'banned':
             if not self.sync_dry_run:
                 user.unban()
-            self.logger.info(
+            logging.info(
                 'User %s unbanned',
                 user.username)
 
@@ -254,7 +256,7 @@ class GitlabSync:
         """
         for user in self.gl.users.list(all=True):
             if user.bot:
-                self.logger.warning('User %s is bot', user.username)
+                logging.warning('User %s is bot', user.username)
                 continue
             current_ldap_provider_user_dn = ''
             for i in user.identities:
@@ -262,7 +264,7 @@ class GitlabSync:
                     current_ldap_provider_user_dn = i['extern_uid']
                     break
             if not current_ldap_provider_user_dn:
-                self.logger.warning('User %s is not managed by ldap %s',
+                logging.warning('User %s is not managed by ldap %s',
                                 user.username, self.gitlab_ldap_provider)
                 continue
 
@@ -282,18 +284,18 @@ class GitlabSync:
 
             need_to_update_user = False
             if self.ldap_gitlab_users[user.username]['admin'] != user.is_admin:
-                self.logger.info('User %s, update is_admin %s->%s', user.username,
+                logging.info('User %s, update is_admin %s->%s', user.username,
                              user.is_admin, self.ldap_gitlab_users[user.username]['admin'])
                 user.admin = self.ldap_gitlab_users[user.username]['admin']
                 need_to_update_user = True
             if self.ldap_gitlab_users[user.username]['displayName'] != user.name:
-                self.logger.info('User %s, update name %s->%s', user.username,
+                logging.info('User %s, update name %s->%s', user.username,
                              user.name, self.ldap_gitlab_users[user.username]['displayName'])
                 user.name = self.ldap_gitlab_users[user.username]['displayName']
                 need_to_update_user = True
 
             if need_to_update_user:
-                self.logger.info('Saving user %s', user.username)
+                logging.info('Saving user %s', user.username)
                 if not self.sync_dry_run:
                     user.save()
             self.sync_ssh_keys(user)
@@ -309,12 +311,12 @@ class GitlabSync:
             ipa_ssh_key_decoded = ipa_ssh_key.decode('utf-8')
             ipa_key_array = ipa_ssh_key_decoded.split()
             if len(ipa_key_array) < 2:
-                self.logger.warning("One of ipa keys doesn.t have protocol or key")
+                logging.warning("One of ipa keys doesn.t have protocol or key")
                 continue
             gitlab_key_id = self.is_ipa_key_in_gitlab_keys(
                 ipa_ssh_key_decoded, gitlab_ssh_keys)
             if gitlab_key_id > 0:
-                self.logger.info("Find existing key for user %s with id %s",
+                logging.info("Find existing key for user %s with id %s",
                              user.username, gitlab_key_id)
                 continue
             try:
@@ -326,10 +328,10 @@ class GitlabSync:
                     key = user.keys.create({'title': title,
                                             'key': ipa_ssh_key_decoded})
                     keyid = key.id
-                self.logger.info("Add key %d for user %s: %s", keyid,
+                logging.info("Add key %d for user %s: %s", keyid,
                              user.username, title)
             except:  # pylint: disable=bare-except
-                self.logger.error("Cannot add key for user %s: %s",
+                logging.error("Cannot add key for user %s: %s",
                               user.username, ipa_ssh_key_decoded)
 
         for gitlab_key in gitlab_ssh_keys:
@@ -339,7 +341,7 @@ class GitlabSync:
             is_ipa_key = self.is_gitlab_key_in_ipa_keys(
                 gitlab_key.key, ipa_ssh_keys)
             if not is_ipa_key:
-                self.logger.info("Remove key for user %s: %s",
+                logging.info("Remove key for user %s: %s",
                              user.username, gitlab_key.title)
                 if not self.sync_dry_run:
                     gitlab_key.delete()
@@ -350,14 +352,14 @@ class GitlabSync:
         """
         g_key_array = gitlab_key.split()
         if len(g_key_array) < 2:
-            self.logger.warning(
+            logging.warning(
                 "One of gitlab keys doesn.t have protocol or key")
             return False
         for ipa_ssh_key in ipa_keys:
             ipa_ssh_key_decoded = ipa_ssh_key.decode('utf-8')
             ipa_key_array = ipa_ssh_key_decoded.split()
             if len(ipa_ssh_key_decoded.split()) < 2:
-                self.logger.warning("One of ipa keys doesn.t have protocol or key")
+                logging.warning("One of ipa keys doesn.t have protocol or key")
                 continue
             # indicies: 0 - protocol, 1 - key
             if ipa_key_array[0] == g_key_array[0] and ipa_key_array[1] == g_key_array[1]:
@@ -372,7 +374,7 @@ class GitlabSync:
         for g_key in gitlab_keys:
             g_key_array = g_key.key.split()
             if len(g_key_array) < 2:
-                self.logger.warning(
+                logging.warning(
                     "One of gitlab keys doesn.t have protocol or key")
                 continue
             # indicies: 0 - protocol, 1 - key
@@ -394,7 +396,7 @@ class GitlabSync:
         Fix access level to access_level
         """
         if member['object'].access_level != abs(access_level):
-            self.logger.info("Update access level for %s in group %s: %d->%d",
+            logging.info("Update access level for %s in group %s: %d->%d",
                          member["username"], group.name, member['object'].access_level, abs(access_level))
             member['object'].access_level = abs(access_level)
             if not self.sync_dry_run:
@@ -407,14 +409,14 @@ class GitlabSync:
         if not self.sync_dry_run:
             group.members.create(
                 {'user_id': user.id, 'access_level': abs(level)})
-        self.logger.info("Add %s(id=%d) to group %s with level %d",
+        logging.info("Add %s(id=%d) to group %s with level %d",
                      user.username, user.id, group.name, abs(level))
 
     def remove_gitlab_group_member(self, groupname, user):
         """
         Remove member from gitlab group
         """
-        self.logger.info("Remove %s from group %s",
+        logging.info("Remove %s from group %s",
                      user['username'], groupname)
         if not self.sync_dry_run:
             user['object'].delete()
@@ -481,7 +483,7 @@ class GitlabSync:
                 continue
 
             for member in members_search:
-                # self.logger.error(member)
+                # logging.error(member)
                 _, member_data = member
                 if 'uid' in member_data:
                     for x in member_data['uid']:
@@ -513,10 +515,10 @@ class GitlabSync:
         Sync groups in gitlab.
         """
         # TODO: Сделать вложенные группы
-        self.logger.info('Sync groups')
+        logging.info('Sync groups')
         # gitlab_groups = {}
         for group in self.gl.groups.list(all=True):
-            self.logger.info('Sync group %s', group.name)
+            logging.info('Sync group %s', group.name)
             ldap_members, is_exist = self.get_ldap_gitlab_group_members(
                 group.name)
             # Group is not managed by ldap
@@ -533,7 +535,7 @@ class GitlabSync:
                 # If user bot or not managed by current provider,
                 # we cannot remove it
                 if user.bot:
-                    self.logger.warning('User %s is bot', user.username)
+                    logging.warning('User %s is bot', user.username)
                     continue
                 current_ldap_provider_user_dn = ''
                 for i in user.identities:
@@ -541,7 +543,7 @@ class GitlabSync:
                         current_ldap_provider_user_dn = i['extern_uid']
                         break
                 if not current_ldap_provider_user_dn:
-                    self.logger.warning('Member %s is not managed by ldap %s',
+                    logging.warning('Member %s is not managed by ldap %s',
                                     user.username, self.gitlab_ldap_provider)
                     continue
                 self.remove_gitlab_group_member(group.name, m)
@@ -569,7 +571,7 @@ class GitlabSync:
                     # and we cannot add user to group, because we not create
                     # accounts while sync
                     if user is None:
-                        self.logger.warning(
+                        logging.warning(
                             "User %s can.t be added to group %s because it not exist in gitlab. "
                             "User need to login before sync", username, group.name)
                         continue
@@ -577,7 +579,7 @@ class GitlabSync:
                     self.create_gitlab_group_member(
                         group, user, data['access_level'])
                 else:
-                    # self.logger.info(member["object"])
-                    # self.logger.info(member['object'].access_level)
+                    # logging.info(member["object"])
+                    # logging.info(member['object'].access_level)
                     self.fix_gitlab_group_member_access(
                         group, member, data['access_level'])
