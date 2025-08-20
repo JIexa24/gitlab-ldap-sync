@@ -36,7 +36,8 @@ class GitlabSync:
 
     def __init__(self):
         sync_dry_run_env = os.getenv('SYNC_DRY_RUN')
-        self.sync_dry_run = sync_dry_run_env if sync_dry_run_env else ''
+        self.sync_dry_run = bool(
+            sync_dry_run_env) if sync_dry_run_env else False
 
         gitlab_api_url_env = os.getenv('GITLAB_API_URL')
         self.gitlab_api_url = gitlab_api_url_env if gitlab_api_url_env else ''
@@ -60,6 +61,9 @@ class GitlabSync:
         self.ldap_gitlab_admin_group = ldap_gitlab_admin_group_env if ldap_gitlab_admin_group_env else 'gitlab-admins'  # nopep8
         ldap_gitlab_group_prefix_env = os.getenv('LDAP_GITLAB_GROUP_PREFIX')
         self.ldap_gitlab_group_prefix = ldap_gitlab_group_prefix_env if ldap_gitlab_group_prefix_env else 'gitlab-group-'  # nopep8
+        ldap_gitlab_project_limit_prefix_env = os.getenv(
+            'LDAP_GITLAB_PROJECT_LIMIT_PREFIX')
+        self.ldap_gitlab_project_limit_prefix = ldap_gitlab_project_limit_prefix_env if ldap_gitlab_project_limit_prefix_env else 'gitlab-prlimit-'  # nopep8
 
         # pylint: disable=invalid-name
         self.gl = None
@@ -88,6 +92,19 @@ class GitlabSync:
             self.gitlab_group_default_access_level = gitlab.const.REPORTER_ACCESS
         if gitlab_group_default_access_level_env == "guest":
             self.gitlab_group_default_access_level = gitlab.const.GUEST_ACCESS
+
+        gitlab_user_default_project_limit_env = os.getenv(
+            'GITLAB_USER_DEFAULT_PROJECT_LIMIT')
+        self.gitlab_user_default_project_limit = gitlab_user_default_project_limit_env if gitlab_user_default_project_limit_env else 20  # nopep8
+
+        ldap_group_gitlab_user_can_create_tlgroups_env = os.getenv(
+            'LDAP_GROUP_GITLAB_USER_CAN_CREATE_TL_GROUPS')
+        self.ldap_group_gitlab_user_can_create_tlgroups = ldap_group_gitlab_user_can_create_tlgroups_env if ldap_group_gitlab_user_can_create_tlgroups_env else ''  # nopep8
+
+        self.sync_can_create_group = False
+        if self.ldap_group_gitlab_user_can_create_tlgroups:
+            self.sync_can_create_group = True
+
         logging.info('Initialize gitlab-ldap-sync')
 
     def check_config(self):
@@ -267,6 +284,8 @@ class GitlabSync:
         """
         Sync users in gitlab.
         """
+        self.sync_project_limits()
+        self.sync_can_create_group_flag()
         for user in self.gl.users.list(all=True):
             if user.bot:
                 logging.warning('User %s is bot', user.username)
@@ -301,10 +320,29 @@ class GitlabSync:
                              user.is_admin, self.ldap_gitlab_users[user.username]['admin'])
                 user.admin = self.ldap_gitlab_users[user.username]['admin']
                 need_to_update_user = True
+
             if self.ldap_gitlab_users[user.username]['displayName'] != user.name:
                 logging.info('User %s, update name %s->%s', user.username,
                              user.name, self.ldap_gitlab_users[user.username]['displayName'])
                 user.name = self.ldap_gitlab_users[user.username]['displayName']
+                need_to_update_user = True
+
+            can_create_group = False
+            if 'can_create_group' in self.ldap_gitlab_users[user.username]:
+                can_create_group = self.ldap_gitlab_users[user.username]['can_create_group']
+            if self.sync_can_create_group and can_create_group != user.can_create_group:
+                logging.info('User %s, update can_create_group %s->%s', user.name,
+                             user.can_create_group, can_create_group)
+                user.can_create_group = can_create_group
+                need_to_update_user = True
+
+            projects_limit = self.gitlab_user_default_project_limit
+            if 'projects_limit' in self.ldap_gitlab_users[user.username]:
+                projects_limit = self.ldap_gitlab_users[user.username]['projects_limit']
+            if projects_limit != user.projects_limit:
+                logging.info('User %s, update projects_limit %s->%s', user.name,
+                             user.projects_limit, projects_limit)
+                user.projects_limit = projects_limit
                 need_to_update_user = True
 
             if need_to_update_user:
@@ -394,6 +432,93 @@ class GitlabSync:
             if ipa_key_array[0] == g_key_array[0] and ipa_key_array[1] == g_key_array[1]:
                 return g_key.id
         return -1
+
+    def sync_can_create_group_flag(self):
+        """
+        Sync can_create_group flag.
+        """
+        if not self.sync_can_create_group:
+            return
+
+        g = self.ldap_group_gitlab_user_can_create_tlgroups
+        # Find all members of this ldap group.
+        members_search = self.ldap_obj.search_s(base=self.ldap_users_base_dn,
+                                                scope=ldap.SCOPE_SUBTREE,
+                                                filterstr=(
+                                                    self.groups_memberof_filter % g),
+                                                attrlist=['uid'])
+        #  No members
+        if len(members_search) == 0:
+            return
+
+        for member in members_search:
+            _, member_data = member
+            if 'uid' in member_data:
+                for x in member_data['uid']:
+                    uid = x.decode('utf-8')
+                    if uid not in self.ldap_gitlab_users:
+                        continue
+                    self.ldap_gitlab_users[uid]['can_create_group'] = True
+        return
+
+    def sync_project_limits(self):
+        """
+        Sync project limit value.
+        """
+        gitlab_groups_prefix = f"cn={self.ldap_gitlab_project_limit_prefix}"
+        gitlab_groups_filter = f"({gitlab_groups_prefix}*)"
+
+        # Find all gitlab groups in ldap
+        for _, group in self.ldap_obj.search_s(base=self.ldap_group_base_dn,
+                                               scope=ldap.SCOPE_SUBTREE,
+                                               filterstr=gitlab_groups_filter,
+                                               attrlist=['cn']):
+            # pylint: disable=invalid-name
+            g = group['cn'][0].decode('utf-8')
+
+            limit = self.get_project_limit_from_groupname(g)
+
+            # Find all members of this ldap group.
+            members_search = self.ldap_obj.search_s(base=self.ldap_users_base_dn,
+                                                    scope=ldap.SCOPE_SUBTREE,
+                                                    filterstr=(
+                                                        self.groups_memberof_filter % g),
+                                                    attrlist=['uid'])
+            #  No members
+            if len(members_search) == 0:
+                continue
+
+            for member in members_search:
+                _, member_data = member
+                if 'uid' in member_data:
+                    for x in member_data['uid']:
+                        uid = x.decode('utf-8')
+                        if uid not in self.ldap_gitlab_users:
+                            continue
+                        if 'projects_limit' not in self.ldap_gitlab_users[uid]:
+                            self.ldap_gitlab_users[uid]['projects_limit'] = limit
+                        else:
+                            if self.ldap_gitlab_users[uid]['projects_limit'] < limit:
+                                self.ldap_gitlab_users[uid]['projects_limit'] = limit
+        return
+
+    def get_project_limit_from_groupname(self, groupname):
+        """
+        Return projects limit by group suffix
+        """
+        limit = self.gitlab_user_default_project_limit
+        if not groupname:
+            return limit
+
+        last_dash_index = groupname.rfind('-')
+        if last_dash_index == len(groupname) - 1:
+            return None
+
+        number_part = groupname[last_dash_index + 1:]
+
+        if number_part.isdigit():
+            return int(number_part)
+        return limit
 
     def get_gitlab_user_by_username(self, username):
         """
@@ -496,7 +621,6 @@ class GitlabSync:
                 continue
 
             for member in members_search:
-                # logging.error(member)
                 _, member_data = member
                 if 'uid' in member_data:
                     for x in member_data['uid']:

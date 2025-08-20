@@ -25,6 +25,15 @@ Functionality with OpenLDAP and other providers is not guaranteed and may requir
 
   ***gitlab-group-test--nested-owner*** - grants owner permissions in the test/nested group.
 
+  - `LDAP_GROUPS_GITLAB_USER_DEFAULT_PROJECT_COUNT` is default value for project limit. Default is 20.
+  When users belongs to many of groups for limits used biggest value.
+  
+  ```text
+  {LDAP_GITLAB_PROJECT_LIMIT_PREFIX}-{LIMIT}
+  ```
+
+  ***gitlab-prlimit-100000*** - Set project limit for members to 100000.
+
 ## Config
 
 Configuration via environment variables.
@@ -43,3 +52,9 @@ Configuration via environment variables.
 - LDAP_GITLAB_ADMIN_GROUP: Group whose members have administrator rights in Gitlab. Default value: `gitlab-admins`.
 - LDAP_GITLAB_GROUP_PREFIX: Prefix for LDAP groups used to synchronize Gitlab group members. Groups must already exist in Gitlab. Default value: `gitlab-group-`.
 - GITLAB_GROUP_DEFAULT_ACCESS_LEVEL: Default access level for users in a group (if the group is specified without a role suffix). Allowed values: `owner`, `maintainer`, `developer`, `reporter`, `guest`. Default value: `developer`
+- LDAP_GITLAB_PROJECT_LIMIT_PREFIX: Prefix for LDAP groups used to synchronize Gitlab users project limit. Default value: `gitlab-prlimit-`.
+- GITLAB_USER_DEFAULT_PROJECT_LIMIT: Default project limit for users.
+  Uses this value when user excluded from any `{LDAP_GITLAB_PROJECT_LIMIT_PREFIX}-{LIMIT}` groups.
+  Default value 20.
+- LDAP_GROUP_GITLAB_USER_CAN_CREATE_TL_GROUPS: Group to allow users create top-level groups.
+  When value empty, sync do not perfomed. Default value ''.
