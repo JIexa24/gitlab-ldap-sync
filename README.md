@@ -1,5 +1,9 @@
 # Gitlab sync with ldap
 
+> [!IMPORTANT]
+> This project is no longer being developed or supported..
+> See [ldap-syncer](//github.com/r9odt/ldap-syncer)
+
 - Work tested only with FreeIPA.
 Functionality with OpenLDAP and other providers is not guaranteed and may require code modifications.
 
