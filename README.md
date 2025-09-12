@@ -1,7 +1,7 @@
 # Gitlab sync with ldap
 
 > [!IMPORTANT]
-> This project is no longer being developed or supported..
+> This project is no longer being developed or supported.
 > See [ldap-syncer](//github.com/r9odt/ldap-syncer)
 
 - Work tested only with FreeIPA.
